@@ -68,7 +68,7 @@ public class AdminScreen extends Screen {
             new Sec("rules", "Reglas", Items.TNT),
             new Sec("players", "Jugadores", Items.PLAYER_HEAD),
             new Sec("event", "Evento", Items.ENDER_PEARL),
-            new Sec("admin", "Vanish", Items.ENDER_EYE));
+            new Sec("admin", "Vanish / Admin", Items.ENDER_EYE));
 
     private record Cat(String id, String title, Item icon) {}
     private static final List<Cat> CATS = List.of(
@@ -134,12 +134,9 @@ public class AdminScreen extends Screen {
     // =====================================================================
     public void applyState(String json) {
         JsonObject o = JsonParser.parseString(json).getAsJsonObject();
-        if (o.has("config")) {
-            Config parsed = GSON.fromJson(o.get("config"), Config.class);
-            parsed.normalize();
-            // si acabas de editar, no pisar tu copia con un estado del servidor que pudo salir antes de recibir el cambio
-            if (System.currentTimeMillis() - lastEdit > 1500) cfg = parsed;
-        }
+        Config parsed = GSON.fromJson(o.get("config"), Config.class);
+        parsed.normalize();
+        if (System.currentTimeMillis() - lastEdit > 1500) cfg = parsed;
         selfUuid = o.get("self").getAsString();
         players.clear();
         for (JsonElement e : o.getAsJsonArray("players")) {
@@ -251,39 +248,8 @@ public class AdminScreen extends Screen {
 
     private void tip(String... lines) {
         List<Text> l = new ArrayList<>();
-        for (String s : lines) for (String part : wrapWords(s, 170)) l.add(Text.literal(part));
+        for (String s : lines) l.add(Text.literal(s));
         tip = l;
-    }
-
-    private List<String> wrapWords(String s, int maxW) {
-        List<String> out = new ArrayList<>();
-        StringBuilder cur = new StringBuilder();
-        for (String word : s.split(" ")) {
-            String t = cur.length() == 0 ? word : cur + " " + word;
-            if (cur.length() > 0 && textRenderer.getWidth(t) > maxW) {
-                out.add(cur.toString());
-                cur = new StringBuilder(word);
-            } else {
-                cur = new StringBuilder(t);
-            }
-        }
-        if (cur.length() > 0) out.add(cur.toString());
-        if (out.isEmpty()) out.add("");
-        return out;
-    }
-
-    private final Map<Item, ItemStack> itemIcons = new HashMap<>();
-
-    private ItemStack iconStack(Item item) {
-        return itemIcons.computeIfAbsent(item, ItemStack::new);
-    }
-
-    private final Map<Identifier, Boolean> blockedCache = new HashMap<>();
-    private int blockedCacheVer = -1;
-
-    private boolean blockedCached(Identifier id, ItemStack st) {
-        if (blockedCacheVer != ver) { blockedCache.clear(); blockedCacheVer = ver; }
-        return blockedCache.computeIfAbsent(id, k -> Categories.blockedMatch(st.getItem(), cfg));
     }
 
     private void button(String label, int x, int y, int w, int h, int color, Runnable act) {
@@ -296,7 +262,7 @@ public class AdminScreen extends Screen {
     private void chip(int x, int y, Item icon, String name, boolean sel, Runnable act) {
         boolean hov = over(x, y, 18, 18);
         rr(x, y, 18, 18, sel ? C_ACC : hov ? 0xFF383D58 : C_BTN);
-        g.drawItem(iconStack(icon), x + 1, y + 1);
+        g.drawItem(new ItemStack(icon), x + 1, y + 1);
         hit(x, y, 18, 18, act);
         if (hov) tip(name);
     }
@@ -352,10 +318,6 @@ public class AdminScreen extends Screen {
 
     // ---------------- filas con scroll ----------------
     private void rows(String key, int x, int y, int w, int h, List<Row> list) {
-        rows(key, x, y, w, h, list, "(vacío)");
-    }
-
-    private void rows(String key, int x, int y, int w, int h, List<Row> list, String empty) {
         int rh = 22;
         int vis = Math.max(1, h / rh);
         int max = Math.max(0, list.size() - vis);
@@ -363,7 +325,7 @@ public class AdminScreen extends Screen {
         scroll.put(key, off);
         areas.add(new Area(key, x, y, w, h, layer));
         rr(x, y, w, h, C_PANEL2);
-        if (list.isEmpty()) { txt(cut(empty, w - 16), x + 8, y + 8, C_MUTED); return; }
+        if (list.isEmpty()) { txt("(vacío)", x + 8, y + 8, C_MUTED); return; }
         for (int i = 0; i < vis && off + i < list.size(); i++) {
             Row r = list.get(off + i);
             int ry = y + i * rh;
@@ -442,7 +404,7 @@ public class AdminScreen extends Screen {
             boolean sel = s.id().equals(section);
             boolean hov = over(px + 6, sy, 86, 24);
             rr(px + 6, sy, 86, 24, sel ? C_ACC : hov ? 0xFF2A2E44 : C_SIDE);
-            g.drawItem(iconStack(s.icon()), px + 9, sy + 4);
+            g.drawItem(new ItemStack(s.icon()), px + 9, sy + 4);
             txt(cut(s.title(), 58), px + 29, sy + 8, sel ? 0xFFFFFFFF : C_MUTED);
             final String id = s.id();
             hit(px + 6, sy, 86, 24, () -> { section = id; active = null; confirmRun = false; });
@@ -580,7 +542,7 @@ public class AdminScreen extends Screen {
 
     /** Lista de multiplicadores (spawn / daño) con -, + y quitar. */
     private void multPanel(int x, int y, int w, int h, String title, String desc, Map<String, Double> map,
-                           double step, double max, Kind kind, double defNew) {
+                            double step, double max, Kind kind, double defNew) {
         txt(title, x, y, C_TEXT);
         txt(cut(desc, w), x, y + 11, C_MUTED);
         List<Row> rs = new ArrayList<>();
@@ -688,7 +650,7 @@ public class AdminScreen extends Screen {
             rr(cx, cy, 18, 18, sel ? C_ACC : hov ? 0xFF383D58 : C_PANEL2);
             ItemStack st = stackOf(id);
             g.drawItem(st, cx + 1, cy + 1);
-            if (blockedCached(id, st)) g.fill(cx, cy, cx + 18, cy + 18, 0x66E0494F);
+            if (Categories.blockedMatch(st.getItem(), cfg)) g.fill(cx, cy, cx + 18, cy + 18, 0x66E0494F);
             hit(cx, cy, 18, 18, () -> selItem = id);
             if (hov) tip(st.getName().getString(), "§8" + id);
         }
@@ -743,9 +705,8 @@ public class AdminScreen extends Screen {
         final int stack = item.getMaxCount();
         button("Stack", x + 6 + bw / 2 + 1, by + gap * 3, bw / 2 - 1, bh, C_BTN, () -> cmd("give", fk + "|" + stack));
         button("Permitir a jugador...", x + 6, by + gap * 4, bw, bh, C_ACC2, () ->
-                openPlayerPicker("Permitir " + fk + " a...",
-                        id -> cfg.playerExceptions.getOrDefault(id, Set.of()).contains(fk),
-                        uuid -> cfg.playerExceptions.computeIfAbsent(uuid, k -> new LinkedHashSet<>()).add(fk), false));
+                openPlayerPicker("Permitir " + fk + " a...", uuid ->
+                        cfg.playerExceptions.computeIfAbsent(uuid, k -> new LinkedHashSet<>()).add(fk)));
     }
 
     // =====================================================================
@@ -965,15 +926,15 @@ public class AdminScreen extends Screen {
             String v = fieldVal(fk).trim();
             if (!v.isEmpty()) { addDmg(map, Matchers.norm(v)); fieldClear(fk); }
         };
-        List<String[]> presets = ruleCat.equals("use")
-                ? List.of(new String[]{"Puertas", "#minecraft:doors"}, new String[]{"Botones", "#minecraft:buttons"})
-                : ruleCat.equals("stand") ? List.of(new String[]{"Magma", "minecraft:magma_block"}) : List.of();
+        List<Map.Entry<String, String>> presets = ruleCat.equals("use")
+                ? List.of(Map.entry("Puertas", "#minecraft:doors"), Map.entry("Botones", "#minecraft:buttons"))
+                : ruleCat.equals("stand") ? List.of(Map.entry("Magma", "minecraft:magma_block")) : List.of();
         int bx = x + w;
         for (int i = presets.size() - 1; i >= 0; i--) {
-            String[] p = presets.get(i);
-            int bw = textRenderer.getWidth(p[0]) + 10;
+            Map.Entry<String, String> p = presets.get(i);
+            int bw = textRenderer.getWidth(p.getKey()) + 10;
             bx -= bw;
-            button(p[0], bx, by, bw, 18, C_ACC2, () -> addDmg(map, p[1]));
+            button(p.getKey(), bx, by, bw, 18, C_ACC2, () -> addDmg(map, p.getValue()));
             bx -= 3;
         }
         bx -= 50;
@@ -990,33 +951,14 @@ public class AdminScreen extends Screen {
     // =====================================================================
     private void secPlayers(int x, int y, int w, int h) {
         if (excPlayer != null) {
-            final String me = excPlayer;
-            Set<String> mine = cfg.playerExceptions.computeIfAbsent(me, k -> new LinkedHashSet<>());
-            txt(cut("Items permitidos a " + nameOf(me), w - 262), x, y + 5, C_TEXT);
-            int bx = x + w;
-            bx -= 54;
-            button("< Volver", bx, y, 54, 16, C_BTN, () -> { excPlayer = null; excMsg = ""; });
-            bx -= 73;
-            button("Copiar de...", bx, y, 70, 16, C_ACC2, () ->
-                    openPlayerPicker("Copiar las excepciones DE... hacia " + nameOf(me), id -> false, id -> copyExc(id, me), true));
-            bx -= 51;
-            button("A todos", bx, y, 48, 16, C_ACC, () -> {
-                int n = 0;
-                for (String id : knownPlayers()) if (!id.equals(me)) { copyExc(me, id); n++; }
-                excMsg = "Copiado a " + n + " jugadores";
-            });
-            bx -= 69;
-            button("Copiar a...", bx, y, 66, 16, C_ACC, () ->
-                    openPlayerPicker("Copiar las excepciones de " + nameOf(me) + " a...",
-                            id -> !id.equals(me) && cfg.playerExceptions.getOrDefault(id, Set.of()).containsAll(mine),
-                            id -> copyExc(me, id), false));
-            toggleLocal("Reemplazar lo que ya tengan (si no, se suman)", "Al copiar: borra antes las excepciones del destino", x, y + 20, w, copyReplace, v -> copyReplace = v);
-            if (!excMsg.isEmpty()) txt(cut(excMsg, w), x, y + 41, C_OK);
-            patternPanel(x, y + 52, w, h - 52, "Items permitidos a " + nameOf(me), "Permitidos aunque estén bloqueados para todos", mine, Kind.ITEM);
+            txt("Excepciones de " + nameOf(excPlayer), x, y + 3, C_TEXT);
+            button("< Volver", x + w - 62, y, 62, 16, C_BTN, () -> excPlayer = null);
+            patternPanel(x, y + 22, w, h - 22, "Items permitidos a " + nameOf(excPlayer), "Permitidos aunque estén bloqueados para todos",
+                    cfg.playerExceptions.computeIfAbsent(excPlayer, k -> new LinkedHashSet<>()), Kind.ITEM);
             return;
         }
         txt("Jugadores en línea", x, y, C_TEXT);
-        txt(cut("Inventario y ender chest se abren en vivo y se pueden editar", w), x, y + 11, C_MUTED);
+        txt("Inventario y ender chest se abren en vivo y se pueden editar", x, y + 11, C_MUTED);
         List<Row> rs = new ArrayList<>();
         for (PInfo p : players) {
             boolean bypass = cfg.fullBypass.contains(p.uuid());
@@ -1028,27 +970,6 @@ public class AdminScreen extends Screen {
                     new RB("Items", C_ACC2, () -> excPlayer = p.uuid())), null));
         }
         rows("players", x, y + 24, w, h - 24, rs);
-    }
-
-    private boolean copyReplace = false;
-    private String excMsg = "";
-
-    /** Jugadores conectados + todos los que han entrado alguna vez (para copiar a offline también). */
-    private List<String> knownPlayers() {
-        LinkedHashSet<String> set = new LinkedHashSet<>();
-        for (PInfo p : players) set.add(p.uuid());
-        set.addAll(cfg.names.keySet());
-        return new ArrayList<>(set);
-    }
-
-    private void copyExc(String from, String to) {
-        if (from.equals(to)) return;
-        Set<String> src = cfg.playerExceptions.get(from);
-        Set<String> dst = cfg.playerExceptions.computeIfAbsent(to, k -> new LinkedHashSet<>());
-        if (copyReplace) dst.clear();
-        if (src != null) dst.addAll(src);
-        excMsg = "Copiado a " + nameOf(to);
-        touch();
     }
 
     // =====================================================================
@@ -1102,7 +1023,8 @@ public class AdminScreen extends Screen {
             for (Group gr : plan) {
                 rs.add(new Row(headIcon, gr.host() + "  —  " + gr.members().size() + " jugadores", String.join(", ", gr.members()), List.of(), null));
             }
-            rows("evplan", x, top, w, bodyH, rs, "Pulsa «Barajar» para generar un reparto aleatorio");
+            rows("evplan", x, top, w, bodyH, rs);
+            if (plan.isEmpty()) txt("Pulsa «Barajar» para generar un reparto aleatorio", x + 8, top + 24, C_MUTED);
         }
 
         int by = y + h - 20, bw = (w - 9) / 4;
@@ -1139,11 +1061,11 @@ public class AdminScreen extends Screen {
         long now = System.currentTimeMillis();
         if (!timers.isEmpty() && now - lastRefresh > 1000) {
             lastRefresh = now;
-            if (ClientPlayNetworking.canSend(Net.Cmd.ID)) ClientPlayNetworking.send(new Net.Cmd("refreshlite", ""));
+            if (ClientPlayNetworking.canSend(Net.Cmd.ID)) ClientPlayNetworking.send(new Net.Cmd("refresh", ""));
         }
 
         txt("Nuevo contador", x, y, C_TEXT);
-        txt(cut("Barra de tiempo arriba. Al llegar a 0 se avisa a los admins para el TP.", w), x, y + 11, C_MUTED);
+        txt("Se muestra en una barra arriba a todos. Al llegar a 0 te avisa para que hagas el TP.", x, y + 11, C_MUTED);
         int half = (w - 6) / 2;
         Runnable create = () -> {
             int secs = TimerManager.parse(fieldVal("ttime"));
@@ -1166,21 +1088,22 @@ public class AdminScreen extends Screen {
         toggleLocal("Visible para todos", "Si está apagado, solo participantes y anfitriones", x, y + 66, half, timerEveryone, v -> timerEveryone = v);
         toggleLocal("TP automático al terminar", "Ejecuta el evento (reparto actual) cuando llegue a 0", x + half + 6, y + 66, w - half - 6, timerAuto, v -> timerAuto = v);
         button("▶ Crear e iniciar contador", x, y + 88, w, 18, C_OK, create);
-        if (!timerMsg.isEmpty()) txt(cut(timerMsg, w), x, y + 109, C_BAD);
+        if (!timerMsg.isEmpty()) txt(timerMsg, x, y + 109, C_BAD);
 
         List<Row> rs = new ArrayList<>();
         for (TInfo t : timers) {
             String title = (t.name().isEmpty() ? "Contador #" + t.id() : t.name()) + "  —  " + mmss(t.left());
             String sub = (t.paused() ? "En pausa" : "Corriendo") + " · " + (t.everyone() ? "para todos" : "participantes")
                     + (t.auto() ? " · TP automático" : "") + " · de " + mmss(t.total());
-            rs.add(new Row(iconStack(Items.CLOCK), title, sub, List.of(
+            rs.add(new Row(new ItemStack(Items.CLOCK), title, sub, List.of(
                     new RB(t.paused() ? "Seguir" : "Pausa", t.paused() ? C_OK : C_WARN, () -> cmd("timer", (t.paused() ? "resume|" : "pause|") + t.id())),
                     new RB("+1m", C_BTN, () -> cmd("timer", "add|" + t.id() + "|60")),
                     new RB("-1m", C_BTN, () -> cmd("timer", "add|" + t.id() + "|-60")),
                     new RB("x", C_BAD, () -> cmd("timer", "stop|" + t.id()))), null));
         }
         int ly = y + (timerMsg.isEmpty() ? 112 : 122);
-        rows("timers", x, ly, w, Math.max(30, h - (ly - y)), rs, "Sin contadores activos");
+        rows("timers", x, ly, w, Math.max(30, h - (ly - y)), rs);
+        if (rs.isEmpty()) txt("Sin contadores activos", x + 8, ly + 8, C_MUTED);
     }
 
     // =====================================================================
@@ -1191,7 +1114,7 @@ public class AdminScreen extends Screen {
         boolean on = me != null && me.vanished();
         rr(x, y, w, 40, C_PANEL2);
         txt("VANISH", x + 8, y + 8, on ? C_OK : C_TEXT);
-        txt(cut("Invisible para todos: cuerpo, nombre y lista", w - 110), x + 8, y + 22, C_MUTED);
+        txt("Invisible para todos: cuerpo, nombre y lista de jugadores", x + 8, y + 22, C_MUTED);
         button(on ? "ACTIVADO" : "Desactivado", x + w - 92, y + 11, 84, 18, on ? C_OK : C_BTN, () -> cmd("vanish", selfUuid));
         toggle("Otros admins te ven", "Los OP siguen viéndote", x, y + 46, w, cfg.vanishVisibleToOps, v -> cfg.vanishVisibleToOps = v);
         toggle("Los mobs te ignoran", "No te atacan estando en vanish", x, y + 68, w, cfg.vanishIgnoredByMobs, v -> cfg.vanishIgnoredByMobs = v);
@@ -1241,18 +1164,14 @@ public class AdminScreen extends Screen {
     }
 
     private void openPlayerPicker(String title, Consumer<String> action) {
-        openPlayerPicker(title, null, action, true);
-    }
-
-    private void openPlayerPicker(String title, Predicate<String> marked, Consumer<String> action, boolean close) {
         pickKind = null;
         pickPlayers = true;
         pickTitle = title;
-        pickMarked = marked;
+        pickMarked = null;
         pickAction = action;
-        pickClose = close;
-        List<String> out = knownPlayers();
-        out.sort(Comparator.comparing(id -> nameOf(id).toLowerCase()));
+        pickClose = true;
+        List<String> out = new ArrayList<>();
+        for (PInfo p : players) out.add(p.uuid());
         pickAll = out;
         fieldClear("picksearch");
         active = "picksearch";
@@ -1319,12 +1238,5 @@ public class AdminScreen extends Screen {
             });
         }
         txt(pickShown.size() + " resultados", x + 8, y + h - 16, C_MUTED);
-        if (pickPlayers) {
-            button("Todos (" + pickShown.size() + ")", x + w - 86, y + h - 22, 78, 16, C_ACC2, () -> {
-                for (String id : new ArrayList<>(pickShown)) act.accept(id);
-                touch();
-                if (close) closePicker();
-            });
-        }
     }
 }
