@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "admincontrol",
+  "version": "${version}",
+  "name": "Admin Control",
+  "description": "Bloqueo de items, control de spawn, daño de mobs, reglas extremas, inventarios y vanish para administradores.",
+  "authors": ["Tu nombre"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.admincontrol.AdminControl"],
+    "client": ["com.admincontrol.client.AdminControlClient"]
+  },
+  "mixins": ["admincontrol.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

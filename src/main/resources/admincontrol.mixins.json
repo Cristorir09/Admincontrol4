@@ -1,0 +1,20 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.admincontrol.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AbstractBlockStateMixin",
+    "CarvedPumpkinBlockMixin",
+    "EntityTrackerEntryMixin",
+    "ItemEntityMixin",
+    "LivingEntityMixin",
+    "MobEntityMixin",
+    "SlotMixin",
+    "SpawnHelperMixin",
+    "WitherSkullBlockMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
